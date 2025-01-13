@@ -4,23 +4,24 @@ import datetime
 
 # Konstanten
 MINDESTLOHN = 12.82  # Aktueller Mindestlohn 2025
-MINIJOB_GRENZE = 556  # Minijob-Grenze 2025
+MINIJOB_GRENZE = 556.0  # Minijob-Grenze 2025
 MONATE = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
 ]
 
-def calculate_salary(grundlohn, stunden, se_zuschlag, se_stunden, se_prozent,
-                    nacht_zuschlag, nacht_stunden, krankenversicherung):
+def calculate_salary(grundlohn: float, stunden: float, se_zuschlag: bool, se_stunden: float, 
+                    se_prozent: float, nacht_zuschlag: bool, nacht_stunden: float, 
+                    krankenversicherung: str) -> dict:
     """Berechnet das Gehalt mit allen Zuschlägen und Abzügen."""
     
     # Grundlohn berechnen
     brutto_grundlohn = grundlohn * stunden
     
     # Zuschläge berechnen
-    zuschlage = 0
+    zuschlage = 0.0
     if se_zuschlag:
-        zuschlage += grundlohn * min(se_stunden, stunden) * (se_prozent / 100)
+        zuschlage += grundlohn * min(se_stunden, stunden) * (se_prozent / 100.0)
     if nacht_zuschlag:
         zuschlage += grundlohn * min(nacht_stunden, stunden) * 0.25
         
@@ -28,10 +29,10 @@ def calculate_salary(grundlohn, stunden, se_zuschlag, se_stunden, se_prozent,
     
     # Abzüge berechnen
     abzuge = {
-        'lohnsteuer': 0,
-        'krankenversicherung': 0,
-        'rentenversicherung': 0,
-        'arbeitslosenversicherung': 0
+        'lohnsteuer': 0.0,
+        'krankenversicherung': 0.0,
+        'rentenversicherung': 0.0,
+        'arbeitslosenversicherung': 0.0
     }
     
     if brutto_gesamt > MINIJOB_GRENZE:
@@ -64,13 +65,13 @@ def main():
                 'calculated': False,
                 'results': None,
                 'inputs': {
-                    'grundlohn': MINDESTLOHN,
-                    'stunden': 26,
+                    'grundlohn': float(MINDESTLOHN),
+                    'stunden': 26.0,
                     'se_zuschlag': False,
-                    'se_stunden': 0,
-                    'se_prozent': 30,
+                    'se_stunden': 0.0,
+                    'se_prozent': 30.0,
                     'nacht_zuschlag': False,
-                    'nacht_stunden': 0,
+                    'nacht_stunden': 0.0,
                     'krankenversicherung': 'Gesetzlich'
                 }
             } for month in MONATE
@@ -94,8 +95,8 @@ def main():
         # Grundlegende Eingaben
         grundlohn = st.number_input(
             "Grundlohn pro Stunde (€)",
-            min_value=MINDESTLOHN,
-            value=month_data['grundlohn'],
+            min_value=float(MINDESTLOHN),
+            value=float(month_data['grundlohn']),
             step=0.01,
             format="%.2f"
         )
@@ -103,8 +104,9 @@ def main():
         stunden = st.number_input(
             "Stunden pro Monat",
             min_value=0.0,
-            value=month_data['stunden'],
-            step=0.5
+            value=float(month_data['stunden']),
+            step=0.5,
+            format="%.1f"
         )
         
         # Zuschläge
@@ -118,20 +120,23 @@ def main():
         if se_zuschlag:
             se_prozent = st.number_input(
                 "SE-Zuschlag Prozent",
-                min_value=0,
-                max_value=100,
-                value=month_data['se_prozent']
+                min_value=0.0,
+                max_value=100.0,
+                value=float(month_data['se_prozent']),
+                step=1.0,
+                format="%.1f"
             )
             se_stunden = st.number_input(
                 "Stunden mit SE-Zuschlag",
                 min_value=0.0,
-                max_value=stunden,
-                value=min(month_data['se_stunden'], stunden),
-                step=0.5
+                max_value=float(stunden),
+                value=min(float(month_data['se_stunden']), float(stunden)),
+                step=0.5,
+                format="%.1f"
             )
         else:
-            se_prozent = 0
-            se_stunden = 0
+            se_prozent = 0.0
+            se_stunden = 0.0
             
         nacht_zuschlag = st.checkbox(
             "Nacht-Zuschlag (25%)",
@@ -142,12 +147,13 @@ def main():
             nacht_stunden = st.number_input(
                 "Stunden mit Nacht-Zuschlag",
                 min_value=0.0,
-                max_value=stunden,
-                value=min(month_data['nacht_stunden'], stunden),
-                step=0.5
+                max_value=float(stunden),
+                value=min(float(month_data['nacht_stunden']), float(stunden)),
+                step=0.5,
+                format="%.1f"
             )
         else:
-            nacht_stunden = 0
+            nacht_stunden = 0.0
             
         krankenversicherung = st.selectbox(
             "Krankenversicherung",
@@ -159,13 +165,13 @@ def main():
         if st.button(f"{selected_month} berechnen"):
             # Aktuelle Eingaben speichern
             st.session_state.monthly_data[selected_month]['inputs'] = {
-                'grundlohn': grundlohn,
-                'stunden': stunden,
+                'grundlohn': float(grundlohn),
+                'stunden': float(stunden),
                 'se_zuschlag': se_zuschlag,
-                'se_stunden': se_stunden,
-                'se_prozent': se_prozent,
+                'se_stunden': float(se_stunden),
+                'se_prozent': float(se_prozent),
                 'nacht_zuschlag': nacht_zuschlag,
-                'nacht_stunden': nacht_stunden,
+                'nacht_stunden': float(nacht_stunden),
                 'krankenversicherung': krankenversicherung
             }
             
