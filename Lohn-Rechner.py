@@ -36,13 +36,17 @@ def calculate_salary(grundlohn: float, stunden: float,
     # Berechnung der verbleibenden Freibetragsgrenze
     freibetrag_rest = max(0, MINIJOB_GRENZE - brutto_grundlohn)
     
+    # Berechnung der möglichen Reststunden (abgerundet)
+    rest_stunden = int(freibetrag_rest / grundlohn)  # int() rundet nach unten ab
+    
     return {
         'brutto_grundlohn': brutto_grundlohn,
         'zuschlage': zuschlage,
         'brutto_gesamt': brutto_gesamt,
         'netto': netto,
         'abzuge': abzuge,
-        'freibetrag_rest': freibetrag_rest
+        'freibetrag_rest': freibetrag_rest,
+        'rest_stunden': rest_stunden
     }
 
 def main():
@@ -125,7 +129,7 @@ def main():
     with col1:
         st.metric("Netto", f"{results['netto']:.2f} €")
     with col2:
-        st.metric("Noch bis Minijob-Grenze", f"{results['freibetrag_rest']:.2f} €")
+        st.metric("Noch bis Minijob-Grenze", f"{results['freibetrag_rest']:.2f} € ({results['rest_stunden']} Stunden)")
     
     # Warnungen und Hinweise
     if results['brutto_grundlohn'] > MINIJOB_GRENZE:
