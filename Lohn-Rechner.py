@@ -158,6 +158,9 @@ def main():
     - inklusive SF-Zuschlag: +3,846 € = 16,666 €
     - Minijob-Grenze: {MINIJOB_GRENZE:.2f} €/Monat
     - Maximale Arbeitszeit: 42 Stunden/Monat = 10,5 Stunden/Woche
+    - Monatslohn bei 6h/w: 307,68 € + 46,152 € = 353,832 €
+    - Monatslohn bei 8h/w: 410,24 + 61,536 = 471,776 € (8h/w); 
+    - Monatslohn bei 10h/w: 512,8 + 76,92 = 589,72 € (10h/w)
     - Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze
     - Vereinfachte Berechnung der Abzüge (30% bei Überschreitung der Minijob-Grenze)
     """)
