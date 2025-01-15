@@ -155,7 +155,9 @@ def main():
     st.info(f"""
     **Hinweise:**
     - Mindestlohn 2025: {MINDESTLOHN:.2f} €/Stunde
+    - inklusive SF-Zuschlag: +3,846 € = 16,666 €
     - Minijob-Grenze: {MINIJOB_GRENZE:.2f} €/Monat
+    - Maximale Arbeitszeit: 42 Stunden/Monat = 10,5 Stunden/Woche
     - Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze
     - Vereinfachte Berechnung der Abzüge (30% bei Überschreitung der Minijob-Grenze)
     """)
