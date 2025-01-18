@@ -5,6 +5,10 @@ from datetime import datetime
 # Konstanten
 MINDESTLOHN = 12.82
 MINIJOB_GRENZE = 556.0
+MONATE = [
+    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+]
 
 def calculate_salary(grundlohn: float, stunden: float, 
                     se_zuschlag: bool, se_zuschlag_stunden: float,
@@ -57,7 +61,9 @@ def calculate_salary(grundlohn: float, stunden: float,
     }
 
 def main():
-    st.title("Gehaltsrechner 2025")
+    st.set_page_config(page_title="Gehaltsrechner 2025", layout="wide")
+    
+    st.title("Gehaltsrechner mit Zuschlägen 2025")
     
     # Initialisiere Session State für monatliche Daten
     if 'monthly_data' not in st.session_state:
@@ -188,20 +194,6 @@ def main():
         Die Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze!
         """)
     
-    # Hinweise
-    st.divider()
-    st.info(f"""
-    **Hinweise:**
-    - Rentenversicherungspflicht: 3,6% des Bruttolohns (ohne Zuschläge)
-    - Mindestlohn 2025: {MINDESTLOHN:.2f} €/Stunde
-    - Minijob-Grenze: {MINIJOB_GRENZE:.2f} €/Monat
-    - Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze
-    - Vereinfachte Berechnung der Abzüge (30% bei Überschreitung der Minijob-Grenze)
-    """)
-
-if __name__ == "__main__":
-    main()
-    
     # Export/Import Funktionen
     st.sidebar.header("Daten speichern/laden")
     
@@ -245,3 +237,22 @@ if __name__ == "__main__":
                 'nacht_zuschlag_stunden': row['Nacht_Zuschlag_Stunden']
             }
         st.sidebar.success("Daten erfolgreich geladen!")
+    
+    # Hinweise
+    st.divider()
+    st.info(f"""
+    **Hinweise:**
+    - Rentenversicherungspflicht: 3,6% des Bruttolohns (ohne Zuschläge)
+    - Mindestlohn 2025: {MINDESTLOHN:.2f} €/Stunde
+    - inklusive SF-Zuschlag: +3,846 € = 16,666 €
+    - Minijob-Grenze: {MINIJOB_GRENZE:.2f} €/Monat
+    - Maximale Arbeitszeit: 42 Stunden/Monat = 10,5 Stunden/Woche
+    - Monatslohn bei 6h/w: 307,68 € + 46,152 € = 353,832 €
+    - Monatslohn bei 8h/w: 410,24 + 61,536 = 471,776 € (8h/w); 
+    - Monatslohn bei 10h/w: 512,8 + 76,92 = 589,72 € (10h/w)
+    - Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze
+    - Vereinfachte Berechnung der Abzüge (30% bei Überschreitung der Minijob-Grenze)
+    """)
+
+if __name__ == "__main__":
+    main()
