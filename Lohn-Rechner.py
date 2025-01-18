@@ -31,9 +31,7 @@ def calculate_salary(grundlohn: float, stunden: float,
     brutto_gesamt = brutto_grundlohn + zuschlage
     
     # Abzüge berechnen
-    abzuge = 0.0
     rentenversicherung = brutto_grundlohn * 0.036  # 3,6% Rentenversicherung für Minijobs
-    
     if brutto_grundlohn > MINIJOB_GRENZE:
         # Bei Überschreitung: vereinfachte Abzüge 30% statt Rentenversicherung
         abzuge = brutto_grundlohn * 0.30
@@ -61,8 +59,10 @@ def calculate_salary(grundlohn: float, stunden: float,
     }
 
 def main():
-    st.set_page_config(page_title="Gehaltsrechner 2025", layout="wide")
+    # Sicherstellen, dass die Konstanten als global erkannt werden
+    global MINDESTLOHN, MINIJOB_GRENZE, MONATE
     
+    st.set_page_config(page_title="Gehaltsrechner 2025", layout="wide")
     st.title("Gehaltsrechner mit Zuschlägen 2025")
     
     # Initialisiere Session State für monatliche Daten
@@ -78,11 +78,10 @@ def main():
             } for month in MONATE
         }
     
-    # Monatsauswahl
+    # Rest der Funktion bleibt unverändert ...
     selected_month = st.selectbox("Monat auswählen", MONATE)
     month_data = st.session_state.monthly_data[selected_month]
     
-    # Grundeinstellungen
     col1, col2 = st.columns(2)
     with col1:
         grundlohn = st.number_input(
@@ -101,10 +100,8 @@ def main():
             format="%.1f"
         )
     
-    # Zuschläge
     st.subheader("Zuschläge (steuerfrei)")
     
-    # SE-Zuschlag
     col1, col2 = st.columns(2)
     with col1:
         se_zuschlag = st.checkbox("SE-Zuschlag (30%)", value=month_data['se_zuschlag'])
@@ -119,7 +116,6 @@ def main():
             disabled=not se_zuschlag
         )
     
-    # Nacht-Zuschlag
     col1, col2 = st.columns(2)
     with col1:
         nacht_zuschlag = st.checkbox("Nacht-Zuschlag (25%)", value=month_data['nacht_zuschlag'])
@@ -134,7 +130,6 @@ def main():
             disabled=not nacht_zuschlag
         )
         
-    # Speichern der Eingaben für den aktuellen Monat
     st.session_state.monthly_data[selected_month] = {
         'grundlohn': grundlohn,
         'stunden': stunden,
@@ -144,18 +139,15 @@ def main():
         'nacht_zuschlag_stunden': nacht_zuschlag_stunden
     }
     
-    # Berechnung
     results = calculate_salary(
         grundlohn, stunden, 
         se_zuschlag, se_zuschlag_stunden,
         nacht_zuschlag, nacht_zuschlag_stunden
     )
     
-    # Ergebnisse anzeigen
     st.divider()
     st.subheader("Ergebnis")
     
-    # Grundlohn und Zuschläge
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Brutto Grundlohn", f"{results['brutto_grundlohn']:.2f} €")
@@ -164,14 +156,12 @@ def main():
     with col3:
         st.metric("Brutto gesamt", f"{results['brutto_gesamt']:.2f} €")
     
-    # Netto und Freibetrag
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Netto", f"{results['netto']:.2f} €")
     with col2:
         st.metric("Noch bis Minijob-Grenze", f"{results['freibetrag_rest']:.2f} € ({results['rest_stunden']} Stunden)")
     
-    # Warnungen und Hinweise
     if results['brutto_grundlohn'] > MINIJOB_GRENZE:
         st.error(f"""
         Minijob-Grenze überschritten!
@@ -194,10 +184,8 @@ def main():
         Die Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze!
         """)
     
-    # Export/Import Funktionen
     st.sidebar.header("Daten speichern/laden")
     
-    # Export Button
     if st.sidebar.button("Daten als CSV exportieren"):
         data_for_export = []
         for month, data in st.session_state.monthly_data.items():
@@ -222,7 +210,6 @@ def main():
             key='download-csv'
         )
     
-    # Import Funktion
     uploaded_file = st.sidebar.file_uploader("CSV-Datei laden", type="csv")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
@@ -238,7 +225,6 @@ def main():
             }
         st.sidebar.success("Daten erfolgreich geladen!")
     
-    # Hinweise
     st.divider()
     st.info(f"""
     **Hinweise:**
