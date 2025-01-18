@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
-# Konstanten
+# Konstanten müssen hier oben definiert sein, damit sie im gesamten Modul verfügbar sind.
 MINDESTLOHN = 12.82
 MINIJOB_GRENZE = 556.0
 MONATE = [
@@ -11,7 +10,7 @@ MONATE = [
 ]
 
 def calculate_salary(grundlohn: float, stunden: float, 
-                    se_zuschlag: bool, se_zuschlag_stunden: float,
+                    sf_zuschlag: bool, sf_zuschlag_stunden: float,
                     nacht_zuschlag: bool, nacht_zuschlag_stunden: float) -> dict:
     """Berechnet das Gehalt mit allen Zuschlägen und Abzügen."""
     
@@ -20,12 +19,12 @@ def calculate_salary(grundlohn: float, stunden: float,
     
     # Zuschläge berechnen (steuerfrei)
     zuschlage = 0.0
-    if se_zuschlag:
-        se_stunden = min(se_zuschlag_stunden, stunden)  # Nicht mehr Zuschlagsstunden als Gesamtstunden
-        zuschlage += grundlohn * se_stunden * 0.3  # 30% Zuschlag
+    if sf_zuschlag:
+        sf_stunden = min(sf_zuschlag_stunden, stunden)
+        zuschlage += grundlohn * sf_stunden * 0.3  # 30% SF-Zuschlag
     if nacht_zuschlag:
-        nacht_stunden = min(nacht_zuschlag_stunden, stunden)  # Nicht mehr Zuschlagsstunden als Gesamtstunden
-        zuschlage += grundlohn * nacht_stunden * 0.25  # 25% Zuschlag
+        nacht_stunden = min(nacht_zuschlag_stunden, stunden)
+        zuschlage += grundlohn * nacht_stunden * 0.25  # 25% Nacht-Zuschlag
         
     # Gesamtbrutto (mit Zuschlägen)
     brutto_gesamt = brutto_grundlohn + zuschlage
@@ -33,19 +32,14 @@ def calculate_salary(grundlohn: float, stunden: float,
     # Abzüge berechnen
     rentenversicherung = brutto_grundlohn * 0.036  # 3,6% Rentenversicherung für Minijobs
     if brutto_grundlohn > MINIJOB_GRENZE:
-        # Bei Überschreitung: vereinfachte Abzüge 30% statt Rentenversicherung
         abzuge = brutto_grundlohn * 0.30
     else:
-        # Im Minijob: nur Rentenversicherung
         abzuge = rentenversicherung
             
     netto = brutto_gesamt - abzuge
     
-    # Berechnung der verbleibenden Freibetragsgrenze
     freibetrag_rest = max(0, MINIJOB_GRENZE - brutto_grundlohn)
-    
-    # Berechnung der möglichen Reststunden (abgerundet)
-    rest_stunden = int(freibetrag_rest / grundlohn)  # int() rundet nach unten ab
+    rest_stunden = int(freibetrag_rest / grundlohn)
     
     return {
         'brutto_grundlohn': brutto_grundlohn,
@@ -59,9 +53,6 @@ def calculate_salary(grundlohn: float, stunden: float,
     }
 
 def main():
-    # Sicherstellen, dass die Konstanten als global erkannt werden
-    global MINDESTLOHN, MINIJOB_GRENZE, MONATE
-    
     st.set_page_config(page_title="Gehaltsrechner 2025", layout="wide")
     st.title("Gehaltsrechner mit Zuschlägen 2025")
     
@@ -70,15 +61,14 @@ def main():
         st.session_state.monthly_data = {
             month: {
                 'grundlohn': MINDESTLOHN,
-                'stunden': 24.0,  # Standardwert: 24 Stunden
-                'se_zuschlag': True,
-                'se_zuschlag_stunden': 12.0,  # Standardwert: 12 Stunden
+                'stunden': 24.0,
+                'sf_zuschlag': True,
+                'sf_zuschlag_stunden': 12.0,
                 'nacht_zuschlag': False,
                 'nacht_zuschlag_stunden': 0.0
             } for month in MONATE
         }
     
-    # Rest der Funktion bleibt unverändert ...
     selected_month = st.selectbox("Monat auswählen", MONATE)
     month_data = st.session_state.monthly_data[selected_month]
     
@@ -101,19 +91,18 @@ def main():
         )
     
     st.subheader("Zuschläge (steuerfrei)")
-    
     col1, col2 = st.columns(2)
     with col1:
-        se_zuschlag = st.checkbox("SE-Zuschlag (30%)", value=month_data['se_zuschlag'])
+        sf_zuschlag = st.checkbox("SF-Zuschlag (30%)", value=month_data['sf_zuschlag'])
     with col2:
-        se_zuschlag_stunden = st.number_input(
-            "Stunden mit SE-Zuschlag",
+        sf_zuschlag_stunden = st.number_input(
+            "Stunden mit SF-Zuschlag",
             min_value=0.0,
             max_value=stunden,
-            value=month_data['se_zuschlag_stunden'],
+            value=month_data['sf_zuschlag_stunden'],
             step=1.0,
             format="%.1f",
-            disabled=not se_zuschlag
+            disabled=not sf_zuschlag
         )
     
     col1, col2 = st.columns(2)
@@ -133,21 +122,20 @@ def main():
     st.session_state.monthly_data[selected_month] = {
         'grundlohn': grundlohn,
         'stunden': stunden,
-        'se_zuschlag': se_zuschlag,
-        'se_zuschlag_stunden': se_zuschlag_stunden,
+        'sf_zuschlag': sf_zuschlag,
+        'sf_zuschlag_stunden': sf_zuschlag_stunden,
         'nacht_zuschlag': nacht_zuschlag,
         'nacht_zuschlag_stunden': nacht_zuschlag_stunden
     }
     
     results = calculate_salary(
         grundlohn, stunden, 
-        se_zuschlag, se_zuschlag_stunden,
+        sf_zuschlag, sf_zuschlag_stunden,
         nacht_zuschlag, nacht_zuschlag_stunden
     )
     
     st.divider()
     st.subheader("Ergebnis")
-    
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Brutto Grundlohn", f"{results['brutto_grundlohn']:.2f} €")
@@ -185,7 +173,6 @@ def main():
         """)
     
     st.sidebar.header("Daten speichern/laden")
-    
     if st.sidebar.button("Daten als CSV exportieren"):
         data_for_export = []
         for month, data in st.session_state.monthly_data.items():
@@ -193,8 +180,8 @@ def main():
                 'Monat': month,
                 'Grundlohn': data['grundlohn'],
                 'Stunden': data['stunden'],
-                'SE_Zuschlag': data['se_zuschlag'],
-                'SE_Zuschlag_Stunden': data['se_zuschlag_stunden'],
+                'SF_Zuschlag': data['sf_zuschlag'],
+                'SF_Zuschlag_Stunden': data['sf_zuschlag_stunden'],
                 'Nacht_Zuschlag': data['nacht_zuschlag'],
                 'Nacht_Zuschlag_Stunden': data['nacht_zuschlag_stunden']
             }
@@ -218,8 +205,8 @@ def main():
             st.session_state.monthly_data[month] = {
                 'grundlohn': row['Grundlohn'],
                 'stunden': row['Stunden'],
-                'se_zuschlag': True if str(row['SE_Zuschlag']).lower() == 'true' else False,
-                'se_zuschlag_stunden': row['SE_Zuschlag_Stunden'],
+                'sf_zuschlag': True if str(row['SF_Zuschlag']).lower() == 'true' else False,
+                'sf_zuschlag_stunden': row['SF_Zuschlag_Stunden'],
                 'nacht_zuschlag': True if str(row['Nacht_Zuschlag']).lower() == 'true' else False,
                 'nacht_zuschlag_stunden': row['Nacht_Zuschlag_Stunden']
             }
@@ -230,12 +217,9 @@ def main():
     **Hinweise:**
     - Rentenversicherungspflicht: 3,6% des Bruttolohns (ohne Zuschläge)
     - Mindestlohn 2025: {MINDESTLOHN:.2f} €/Stunde
-    - inklusive SF-Zuschlag: +3,846 € = 16,666 €
+    - SF-Zuschlag (Sonntag-/Feiertagszuschlag) = 30% Aufschlag (steuerfrei)
     - Minijob-Grenze: {MINIJOB_GRENZE:.2f} €/Monat
     - Maximale Arbeitszeit: 42 Stunden/Monat = 10,5 Stunden/Woche
-    - Monatslohn bei 6h/w: 307,68 € + 46,152 € = 353,832 €
-    - Monatslohn bei 8h/w: 410,24 + 61,536 = 471,776 € (8h/w); 
-    - Monatslohn bei 10h/w: 512,8 + 76,92 = 589,72 € (10h/w)
     - Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze
     - Vereinfachte Berechnung der Abzüge (30% bei Überschreitung der Minijob-Grenze)
     """)
