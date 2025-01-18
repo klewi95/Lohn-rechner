@@ -59,13 +59,30 @@ def calculate_salary(grundlohn: float, stunden: float,
 def main():
     st.title("Gehaltsrechner 2025")
     
+    # Initialisiere Session State für monatliche Daten
+    if 'monthly_data' not in st.session_state:
+        st.session_state.monthly_data = {
+            month: {
+                'grundlohn': MINDESTLOHN,
+                'stunden': 24.0,  # Standardwert: 24 Stunden
+                'se_zuschlag': True,
+                'se_zuschlag_stunden': 12.0,  # Standardwert: 12 Stunden
+                'nacht_zuschlag': False,
+                'nacht_zuschlag_stunden': 0.0
+            } for month in MONATE
+        }
+    
+    # Monatsauswahl
+    selected_month = st.selectbox("Monat auswählen", MONATE)
+    month_data = st.session_state.monthly_data[selected_month]
+    
     # Grundeinstellungen
     col1, col2 = st.columns(2)
     with col1:
         grundlohn = st.number_input(
             "Stundenlohn (€)",
             min_value=MINDESTLOHN,
-            value=MINDESTLOHN,
+            value=month_data['grundlohn'],
             step=0.5,
             format="%.2f"
         )
@@ -73,7 +90,7 @@ def main():
         stunden = st.number_input(
             "Stunden pro Monat",
             min_value=0.0,
-            value=26.0,
+            value=month_data['stunden'],
             step=1.0,
             format="%.1f"
         )
@@ -84,13 +101,13 @@ def main():
     # SE-Zuschlag
     col1, col2 = st.columns(2)
     with col1:
-        se_zuschlag = st.checkbox("SE-Zuschlag (30%)")
+        se_zuschlag = st.checkbox("SE-Zuschlag (30%)", value=month_data['se_zuschlag'])
     with col2:
         se_zuschlag_stunden = st.number_input(
             "Stunden mit SE-Zuschlag",
             min_value=0.0,
             max_value=stunden,
-            value=0.0,
+            value=month_data['se_zuschlag_stunden'],
             step=1.0,
             format="%.1f",
             disabled=not se_zuschlag
@@ -99,17 +116,27 @@ def main():
     # Nacht-Zuschlag
     col1, col2 = st.columns(2)
     with col1:
-        nacht_zuschlag = st.checkbox("Nacht-Zuschlag (25%)")
+        nacht_zuschlag = st.checkbox("Nacht-Zuschlag (25%)", value=month_data['nacht_zuschlag'])
     with col2:
         nacht_zuschlag_stunden = st.number_input(
             "Stunden mit Nacht-Zuschlag",
             min_value=0.0,
             max_value=stunden,
-            value=0.0,
+            value=month_data['nacht_zuschlag_stunden'],
             step=1.0,
             format="%.1f",
             disabled=not nacht_zuschlag
         )
+        
+    # Speichern der Eingaben für den aktuellen Monat
+    st.session_state.monthly_data[selected_month] = {
+        'grundlohn': grundlohn,
+        'stunden': stunden,
+        'se_zuschlag': se_zuschlag,
+        'se_zuschlag_stunden': se_zuschlag_stunden,
+        'nacht_zuschlag': nacht_zuschlag,
+        'nacht_zuschlag_stunden': nacht_zuschlag_stunden
+    }
     
     # Berechnung
     results = calculate_salary(
@@ -174,3 +201,47 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    # Export/Import Funktionen
+    st.sidebar.header("Daten speichern/laden")
+    
+    # Export Button
+    if st.sidebar.button("Daten als CSV exportieren"):
+        data_for_export = []
+        for month, data in st.session_state.monthly_data.items():
+            row = {
+                'Monat': month,
+                'Grundlohn': data['grundlohn'],
+                'Stunden': data['stunden'],
+                'SE_Zuschlag': data['se_zuschlag'],
+                'SE_Zuschlag_Stunden': data['se_zuschlag_stunden'],
+                'Nacht_Zuschlag': data['nacht_zuschlag'],
+                'Nacht_Zuschlag_Stunden': data['nacht_zuschlag_stunden']
+            }
+            data_for_export.append(row)
+        
+        df = pd.DataFrame(data_for_export)
+        csv = df.to_csv(index=False)
+        st.sidebar.download_button(
+            "CSV herunterladen",
+            csv,
+            "lohnberechnung.csv",
+            "text/csv",
+            key='download-csv'
+        )
+    
+    # Import Funktion
+    uploaded_file = st.sidebar.file_uploader("CSV-Datei laden", type="csv")
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        for _, row in df.iterrows():
+            month = row['Monat']
+            st.session_state.monthly_data[month] = {
+                'grundlohn': row['Grundlohn'],
+                'stunden': row['Stunden'],
+                'se_zuschlag': row['SE_Zuschlag'],
+                'se_zuschlag_stunden': row['SE_Zuschlag_Stunden'],
+                'nacht_zuschlag': row['Nacht_Zuschlag'],
+                'nacht_zuschlag_stunden': row['Nacht_Zuschlag_Stunden']
+            }
+        st.sidebar.success("Daten erfolgreich geladen!")
