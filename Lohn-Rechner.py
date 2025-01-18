@@ -226,5 +226,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-Durch das Verschieben der Definition von MONATE an den Anfang des Codes ist die Variable nun global verfügbar und der NameError sollte behoben sein.
