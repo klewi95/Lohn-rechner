@@ -2,13 +2,27 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# Konstanten
+# Konstanten definieren
 MINDESTLOHN = 12.82
 MINIJOB_GRENZE = 556.0
 MONATE = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
 ]
+
+# Session State initialisieren
+def init_session_state():
+    if 'monthly_data' not in st.session_state:
+        st.session_state.monthly_data = {}
+        for month in MONATE:
+            st.session_state.monthly_data[month] = {
+                'grundlohn': 12.82,  # MINDESTLOHN direkt als Wert
+                'stunden': 24.0,
+                'se_zuschlag': True,
+                'se_zuschlag_stunden': 12.0,
+                'nacht_zuschlag': False,
+                'nacht_zuschlag_stunden': 0.0
+            }
 
 def calculate_salary(grundlohn: float, stunden: float, 
                     se_zuschlag: bool, se_zuschlag_stunden: float,
@@ -21,33 +35,27 @@ def calculate_salary(grundlohn: float, stunden: float,
     # Zuschläge berechnen (steuerfrei)
     zuschlage = 0.0
     if se_zuschlag:
-        se_stunden = min(se_zuschlag_stunden, stunden)  # Nicht mehr Zuschlagsstunden als Gesamtstunden
-        zuschlage += grundlohn * se_stunden * 0.3  # 30% Zuschlag
+        se_stunden = min(se_zuschlag_stunden, stunden)
+        zuschlage += grundlohn * se_stunden * 0.3
     if nacht_zuschlag:
-        nacht_stunden = min(nacht_zuschlag_stunden, stunden)  # Nicht mehr Zuschlagsstunden als Gesamtstunden
-        zuschlage += grundlohn * nacht_stunden * 0.25  # 25% Zuschlag
+        nacht_stunden = min(nacht_zuschlag_stunden, stunden)
+        zuschlage += grundlohn * nacht_stunden * 0.25
         
-    # Gesamtbrutto (mit Zuschlägen)
     brutto_gesamt = brutto_grundlohn + zuschlage
     
     # Abzüge berechnen
     abzuge = 0.0
-    rentenversicherung = brutto_grundlohn * 0.036  # 3,6% Rentenversicherung für Minijobs
+    rentenversicherung = brutto_grundlohn * 0.036
     
     if brutto_grundlohn > MINIJOB_GRENZE:
-        # Bei Überschreitung: vereinfachte Abzüge 30% statt Rentenversicherung
         abzuge = brutto_grundlohn * 0.30
     else:
-        # Im Minijob: nur Rentenversicherung
         abzuge = rentenversicherung
             
     netto = brutto_gesamt - abzuge
     
-    # Berechnung der verbleibenden Freibetragsgrenze
     freibetrag_rest = max(0, MINIJOB_GRENZE - brutto_grundlohn)
-    
-    # Berechnung der möglichen Reststunden (abgerundet)
-    rest_stunden = int(freibetrag_rest / grundlohn)  # int() rundet nach unten ab
+    rest_stunden = int(freibetrag_rest / grundlohn)
     
     return {
         'brutto_grundlohn': brutto_grundlohn,
@@ -60,23 +68,30 @@ def calculate_salary(grundlohn: float, stunden: float,
         'rest_stunden': rest_stunden
     }
 
+def export_data():
+    data_for_export = []
+    for month in MONATE:
+        data = st.session_state.monthly_data[month]
+        row = {
+            'Monat': month,
+            'Grundlohn': data['grundlohn'],
+            'Stunden': data['stunden'],
+            'SE_Zuschlag': data['se_zuschlag'],
+            'SE_Zuschlag_Stunden': data['se_zuschlag_stunden'],
+            'Nacht_Zuschlag': data['nacht_zuschlag'],
+            'Nacht_Zuschlag_Stunden': data['nacht_zuschlag_stunden']
+        }
+        data_for_export.append(row)
+    
+    df = pd.DataFrame(data_for_export)
+    return df.to_csv(index=False)
+
 def main():
     st.set_page_config(page_title="Gehaltsrechner 2025", layout="wide")
-    
     st.title("Gehaltsrechner mit Zuschlägen 2025")
     
-    # Initialisiere Session State für monatliche Daten
-    if 'monthly_data' not in st.session_state:
-        st.session_state.monthly_data = {
-            month: {
-                'grundlohn': MINDESTLOHN,
-                'stunden': 24.0,  # Standardwert: 24 Stunden
-                'se_zuschlag': True,
-                'se_zuschlag_stunden': 12.0,  # Standardwert: 12 Stunden
-                'nacht_zuschlag': False,
-                'nacht_zuschlag_stunden': 0.0
-            } for month in MONATE
-        }
+    # Session State initialisieren
+    init_session_state()
     
     # Monatsauswahl
     selected_month = st.selectbox("Monat auswählen", MONATE)
@@ -87,8 +102,8 @@ def main():
     with col1:
         grundlohn = st.number_input(
             "Stundenlohn (€)",
-            min_value=MINDESTLOHN,
-            value=month_data['grundlohn'],
+            min_value=float(12.82),  # MINDESTLOHN direkt als Wert
+            value=float(month_data['grundlohn']),
             step=0.5,
             format="%.2f"
         )
@@ -96,7 +111,7 @@ def main():
         stunden = st.number_input(
             "Stunden pro Monat",
             min_value=0.0,
-            value=month_data['stunden'],
+            value=float(month_data['stunden']),
             step=1.0,
             format="%.1f"
         )
@@ -112,8 +127,8 @@ def main():
         se_zuschlag_stunden = st.number_input(
             "Stunden mit SE-Zuschlag",
             min_value=0.0,
-            max_value=stunden,
-            value=month_data['se_zuschlag_stunden'],
+            max_value=float(stunden),
+            value=float(month_data['se_zuschlag_stunden']),
             step=1.0,
             format="%.1f",
             disabled=not se_zuschlag
@@ -127,22 +142,22 @@ def main():
         nacht_zuschlag_stunden = st.number_input(
             "Stunden mit Nacht-Zuschlag",
             min_value=0.0,
-            max_value=stunden,
-            value=month_data['nacht_zuschlag_stunden'],
+            max_value=float(stunden),
+            value=float(month_data['nacht_zuschlag_stunden']),
             step=1.0,
             format="%.1f",
             disabled=not nacht_zuschlag
         )
         
-    # Speichern der Eingaben für den aktuellen Monat
-    st.session_state.monthly_data[selected_month] = {
+    # Speichern der Eingaben
+    st.session_state.monthly_data[selected_month].update({
         'grundlohn': grundlohn,
         'stunden': stunden,
         'se_zuschlag': se_zuschlag,
         'se_zuschlag_stunden': se_zuschlag_stunden,
         'nacht_zuschlag': nacht_zuschlag,
         'nacht_zuschlag_stunden': nacht_zuschlag_stunden
-    }
+    })
     
     # Berechnung
     results = calculate_salary(
@@ -155,7 +170,6 @@ def main():
     st.divider()
     st.subheader("Ergebnis")
     
-    # Grundlohn und Zuschläge
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Brutto Grundlohn", f"{results['brutto_grundlohn']:.2f} €")
@@ -164,14 +178,12 @@ def main():
     with col3:
         st.metric("Brutto gesamt", f"{results['brutto_gesamt']:.2f} €")
     
-    # Netto und Freibetrag
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Netto", f"{results['netto']:.2f} €")
     with col2:
         st.metric("Noch bis Minijob-Grenze", f"{results['freibetrag_rest']:.2f} € ({results['rest_stunden']} Stunden)")
     
-    # Warnungen und Hinweise
     if results['brutto_grundlohn'] > MINIJOB_GRENZE:
         st.error(f"""
         Minijob-Grenze überschritten!
@@ -194,26 +206,11 @@ def main():
         Die Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze!
         """)
     
-    # Export/Import Funktionen
+    # Export/Import
     st.sidebar.header("Daten speichern/laden")
     
-    # Export Button
     if st.sidebar.button("Daten als CSV exportieren"):
-        data_for_export = []
-        for month, data in st.session_state.monthly_data.items():
-            row = {
-                'Monat': month,
-                'Grundlohn': data['grundlohn'],
-                'Stunden': data['stunden'],
-                'SE_Zuschlag': data['se_zuschlag'],
-                'SE_Zuschlag_Stunden': data['se_zuschlag_stunden'],
-                'Nacht_Zuschlag': data['nacht_zuschlag'],
-                'Nacht_Zuschlag_Stunden': data['nacht_zuschlag_stunden']
-            }
-            data_for_export.append(row)
-        
-        df = pd.DataFrame(data_for_export)
-        csv = df.to_csv(index=False)
+        csv = export_data()
         st.sidebar.download_button(
             "CSV herunterladen",
             csv,
@@ -222,23 +219,21 @@ def main():
             key='download-csv'
         )
     
-    # Import Funktion
     uploaded_file = st.sidebar.file_uploader("CSV-Datei laden", type="csv")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         for _, row in df.iterrows():
             month = row['Monat']
-            st.session_state.monthly_data[month] = {
-                'grundlohn': row['Grundlohn'],
-                'stunden': row['Stunden'],
-                'se_zuschlag': row['SE_Zuschlag'],
-                'se_zuschlag_stunden': row['SE_Zuschlag_Stunden'],
-                'nacht_zuschlag': row['Nacht_Zuschlag'],
-                'nacht_zuschlag_stunden': row['Nacht_Zuschlag_Stunden']
-            }
+            st.session_state.monthly_data[month].update({
+                'grundlohn': float(row['Grundlohn']),
+                'stunden': float(row['Stunden']),
+                'se_zuschlag': bool(row['SE_Zuschlag']),
+                'se_zuschlag_stunden': float(row['SE_Zuschlag_Stunden']),
+                'nacht_zuschlag': bool(row['Nacht_Zuschlag']),
+                'nacht_zuschlag_stunden': float(row['Nacht_Zuschlag_Stunden'])
+            })
         st.sidebar.success("Daten erfolgreich geladen!")
     
-    # Hinweise
     st.divider()
     st.info(f"""
     **Hinweise:**
