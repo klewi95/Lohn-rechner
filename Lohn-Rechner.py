@@ -26,10 +26,16 @@ def calculate_salary(grundlohn: float, stunden: float,
     # Gesamtbrutto (mit Zuschlägen)
     brutto_gesamt = brutto_grundlohn + zuschlage
     
-    # Abzüge berechnen (nur auf Grundlohn, nicht auf Zuschläge)
+    # Abzüge berechnen
     abzuge = 0.0
+    rentenversicherung = brutto_grundlohn * 0.036  # 3,6% Rentenversicherung für Minijobs
+    
     if brutto_grundlohn > MINIJOB_GRENZE:
-        abzuge = brutto_grundlohn * 0.30  # Vereinfachte Abzüge 30%
+        # Bei Überschreitung: vereinfachte Abzüge 30% statt Rentenversicherung
+        abzuge = brutto_grundlohn * 0.30
+    else:
+        # Im Minijob: nur Rentenversicherung
+        abzuge = rentenversicherung
             
     netto = brutto_gesamt - abzuge
     
@@ -45,6 +51,7 @@ def calculate_salary(grundlohn: float, stunden: float,
         'brutto_gesamt': brutto_gesamt,
         'netto': netto,
         'abzuge': abzuge,
+        'rentenversicherung': rentenversicherung if brutto_grundlohn <= MINIJOB_GRENZE else 0.0,
         'freibetrag_rest': freibetrag_rest,
         'rest_stunden': rest_stunden
     }
@@ -144,23 +151,23 @@ def main():
     else:
         st.success(f"""
         Innerhalb der Minijob-Grenze ✓
-        - Aktueller Grundlohn: {results['brutto_grundlohn']:.2f} €
+        - Brutto Grundlohn: {results['brutto_grundlohn']:.2f} €
+        - Rentenversicherung (3,6%): -{results['rentenversicherung']:.2f} €
+        - Netto Grundlohn: {(results['brutto_grundlohn'] - results['rentenversicherung']):.2f} €
+        - Steuerfreie Zuschläge: +{results['zuschlage']:.2f} €
+        - Netto Gesamt: {results['netto']:.2f} €
         - Bis zur Grenze: {results['freibetrag_rest']:.2f} €
         
-        Die Zuschläge ({results['zuschlage']:.2f} €) sind steuerfrei und zählen nicht zur Minijob-Grenze!
+        Die Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze!
         """)
     
     # Hinweise
     st.divider()
     st.info(f"""
     **Hinweise:**
+    - Rentenversicherungspflicht: 3,6% des Bruttolohns (ohne Zuschläge)
     - Mindestlohn 2025: {MINDESTLOHN:.2f} €/Stunde
-    - inklusive SF-Zuschlag: +3,846 € = 16,666 €
     - Minijob-Grenze: {MINIJOB_GRENZE:.2f} €/Monat
-    - Maximale Arbeitszeit: 42 Stunden/Monat = 10,5 Stunden/Woche
-    - Monatslohn bei 6h/w: 307,68 € + 46,152 € = 353,832 €
-    - Monatslohn bei 8h/w: 410,24 + 61,536 = 471,776 € (8h/w); 
-    - Monatslohn bei 10h/w: 512,8 + 76,92 = 589,72 € (10h/w)
     - Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze
     - Vereinfachte Berechnung der Abzüge (30% bei Überschreitung der Minijob-Grenze)
     """)
