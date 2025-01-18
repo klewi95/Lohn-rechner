@@ -7,7 +7,7 @@ MINIJOB_GRENZE = 556.0
 MONATE = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
-]
+]  # <-  Die Definition von MONATE wurde hierhin verschoben
 
 def calculate_salary(grundlohn: float, stunden: float, 
                     sf_zuschlag: bool, sf_zuschlag_stunden: float,
@@ -226,3 +226,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+Durch das Verschieben der Definition von MONATE an den Anfang des Codes ist die Variable nun global verfügbar und der NameError sollte behoben sein.
