@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import calendar
+from datetime import datetime, date
 
 # Konstanten müssen hier oben definiert sein, damit sie im gesamten Modul verfügbar sind.
 MINDESTLOHN = 12.82
@@ -8,6 +10,21 @@ MONATE = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
 ]
+
+# Feiertage NRW 2025 mit genauen Daten
+FEIERTAGE_NRW_2025 = {
+    (1, 1): 'Neujahr',
+    (4, 18): 'Karfreitag',
+    (4, 21): 'Ostermontag',
+    (5, 1): 'Tag der Arbeit',
+    (5, 29): 'Christi Himmelfahrt',
+    (6, 9): 'Pfingstmontag',
+    (6, 19): 'Fronleichnam',
+    (10, 3): 'Tag der Deutschen Einheit',
+    (11, 1): 'Allerheiligen',
+    (12, 25): '1. Weihnachtstag',
+    (12, 26): '2. Weihnachtstag'
+}
 
 def get_status_color(prozent):
     """Gibt die Farbe basierend auf dem Prozentsatz zurück."""
@@ -32,6 +49,80 @@ def get_thermometer_html(prozent):
             </div>
         </div>
     """
+
+def get_month_calendar_html(year, month, feiertage):
+    """Erstellt einen HTML-Kalender mit markierten Feiertagen."""
+    cal = calendar.monthcalendar(year, month)
+    month_name = MONATE[month-1]
+    
+    # Kalenderstile
+    styles = """
+    <style>
+        .calendar {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: Arial, sans-serif;
+        }
+        .calendar th {
+            background-color: #f8f9fa;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+        .calendar td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+        .holiday {
+            background-color: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+        }
+        .today {
+            background-color: #e3f2fd;
+            font-weight: bold;
+        }
+        .month-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+    </style>
+    """
+    
+    # Kalender HTML
+    html = f"{styles}<div class='month-title'>{month_name} {year}</div>"
+    html += "<table class='calendar'>"
+    html += "<tr><th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th><th>So</th></tr>"
+    
+    today = date.today()
+    
+    for week in cal:
+        html += "<tr>"
+        for day in week:
+            if day == 0:
+                html += "<td></td>"
+            else:
+                # Prüfen ob Feiertag
+                is_holiday = (month, day) in feiertage
+                holiday_name = feiertage.get((month, day), '')
+                
+                # Prüfen ob heute
+                is_today = (day == today.day and month == today.month and year == today.year)
+                
+                # Zellenklasse bestimmen
+                cell_class = 'holiday' if is_holiday else 'today' if is_today else ''
+                
+                # Tooltip mit Feiertagsname
+                title_attr = f" title='{holiday_name}'" if is_holiday else ''
+                
+                html += f"<td class='{cell_class}'{title_attr}>{day}</td>"
+        html += "</tr>"
+    html += "</table>"
+    
+    return html
 
 def calculate_salary(grundlohn: float, stunden: float, 
                     sf_zuschlag: bool, sf_zuschlag_stunden: float,
@@ -95,6 +186,22 @@ def main():
     
     selected_month = st.selectbox("Monat auswählen", MONATE)
     month_data = st.session_state.monthly_data[selected_month]
+    
+    # Kalender mit Feiertagen anzeigen
+    month_index = MONATE.index(selected_month) + 1
+    calendar_html = get_month_calendar_html(2025, month_index, FEIERTAGE_NRW_2025)
+    st.markdown(calendar_html, unsafe_allow_html=True)
+    
+    # Feiertage des Monats anzeigen
+    feiertage_im_monat = [(day, name) for (m, day), name in FEIERTAGE_NRW_2025.items() if m == month_index]
+    if feiertage_im_monat:
+        feiertage_text = "\n".join([f"- {day:02d}.{month_index:02d}.: {name}" for day, name in feiertage_im_monat])
+        st.info(f"""
+        **Feiertage in {selected_month} 2025 (NRW):**
+        {feiertage_text}
+        
+        An Feiertagen gilt der SF-Zuschlag (30%).
+        """)
     
     # Vorlagen für typische Szenarien
     template = st.selectbox(
@@ -196,7 +303,7 @@ def main():
         st.metric("Netto", f"{results['netto']:.2f} €")
     with col2:
         st.metric("Noch bis Minijob-Grenze", f"{results['freibetrag_rest']:.2f} € ({results['rest_stunden']} Stunden)")
-
+    
     if results['brutto_grundlohn'] > MINIJOB_GRENZE:
         st.error(f"""
         Minijob-Grenze überschritten!
@@ -218,7 +325,7 @@ def main():
         
         Die Zuschläge sind steuerfrei und zählen nicht zur Minijob-Grenze!
         """)
-
+    
     # Monatsübersicht mit verbessertem Balkendiagramm
     st.subheader("Monatsübersicht")
     
