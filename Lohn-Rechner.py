@@ -76,7 +76,7 @@ def calculate_salary(grundlohn: float, stunden: float,
         'rest_stunden': rest_stunden
     }
 
-                              def main():
+def main():
     st.set_page_config(page_title="Gehaltsrechner 2025", layout="wide")
     st.title("Gehaltsrechner mit Zuschlägen 2025")
     
