@@ -66,7 +66,7 @@ def get_month_calendar_html(year: int, month: int, feiertage: dict) -> str:
     cal = calendar.monthcalendar(year, month)
     month_name = MONATE[month-1]
     
-    # Kalenderstile (einmalig im Header der App laden oder hier belassen)
+    # Kalenderstile
     styles = """
     <style>
         .calendar {
@@ -133,10 +133,15 @@ def get_month_calendar_html(year: int, month: int, feiertage: dict) -> str:
 
 def calculate_salary(grundlohn: float, stunden: float,
                      sf_zuschlag: bool, sf_zuschlag_stunden: float,
-                     nacht_zuschlag: bool, nacht_zuschlag_stunden: float) -> dict:
-    """Berechnet das Gehalt mit allen Zuschlägen und Abzügen."""
+                     nacht_zuschlag: bool, nacht_zuschlag_stunden: float,
+                     urlaubsentgelt: float = 0.0) -> dict: # Neuer Parameter
+    """Berechnet das Gehalt mit allen Zuschlägen und Abzügen, inklusive Urlaubsentgelt."""
     
-    brutto_grundlohn = grundlohn * stunden
+    # Grundlohn der gearbeiteten Stunden
+    brutto_grundlohn_stunden = grundlohn * stunden
+    
+    # Gesamter Brutto-Grundlohn für die Minijob-Grenze (Stunden + Urlaubsentgelt)
+    brutto_grundlohn_fuer_grenze = brutto_grundlohn_stunden + urlaubsentgelt # Urlaubsentgelt zählt hierzu
     
     zuschlage = 0.0
     if sf_zuschlag:
@@ -147,26 +152,28 @@ def calculate_salary(grundlohn: float, stunden: float,
         nacht_stunden = min(nacht_zuschlag_stunden, stunden)
         zuschlage += grundlohn * nacht_stunden * RATES["nacht_zuschlag_rate"]
             
-    brutto_gesamt = brutto_grundlohn + zuschlage
+    brutto_gesamt = brutto_grundlohn_fuer_grenze + zuschlage # Gesamter Brutto-Betrag
     
     rentenversicherung_abzug = 0.0
     pauschale_abzuege = 0.0
     gesamte_abzuege = 0.0
     
-    if brutto_grundlohn <= MINIJOB_GRENZE:
-        rentenversicherung_abzug = brutto_grundlohn * RATES["rentenversicherung_minijob"]
+    if brutto_grundlohn_fuer_grenze <= MINIJOB_GRENZE: # Prüfung mit dem neuen Wert
+        rentenversicherung_abzug = brutto_grundlohn_fuer_grenze * RATES["rentenversicherung_minijob"]
         gesamte_abzuege = rentenversicherung_abzug
     else:
-        pauschale_abzuege = brutto_grundlohn * RATES["pauschale_abzuege_ueber_minijob"]
+        pauschale_abzuege = brutto_grundlohn_fuer_grenze * RATES["pauschale_abzuege_ueber_minijob"]
         gesamte_abzuege = pauschale_abzuege
             
     netto = brutto_gesamt - gesamte_abzuege
     
-    freibetrag_rest = max(0, MINIJOB_GRENZE - brutto_grundlohn)
+    freibetrag_rest = max(0, MINIJOB_GRENZE - brutto_grundlohn_fuer_grenze)
     rest_stunden = int(freibetrag_rest / grundlohn) if grundlohn > 0 else 0
     
     return {
-        'brutto_grundlohn': brutto_grundlohn,
+        'brutto_grundlohn_stunden': brutto_grundlohn_stunden, # Neu: Unterscheidung
+        'urlaubsentgelt': urlaubsentgelt, # Neu: Rückgabe des Urlaubsentgelts
+        'brutto_grundlohn_fuer_grenze': brutto_grundlohn_fuer_grenze, # Neu: Für die Grenze relevanter Brutto-Lohn
         'zuschlage': zuschlage,
         'brutto_gesamt': brutto_gesamt,
         'netto': netto,
@@ -189,13 +196,23 @@ def main():
             month: {
                 'grundlohn': MINDESTLOHN,
                 'stunden': 24.0,
-                'sf_zuschlag': True,
-                'sf_zuschlag_stunden': 12.0, # Beispielwert für SF-Stunden
+                'sf_zuschlag': False, # Standardwert auf False
+                'sf_zuschlag_stunden': 0.0, # Standardwert auf 0.0
                 'nacht_zuschlag': False,
                 'nacht_zuschlag_stunden': 0.0
             } for month in MONATE
         }
     
+    # Initialisiere Urlaubsinformationen im Session State
+    if 'monthly_vacation' not in st.session_state:
+        st.session_state.monthly_vacation = {
+            month: {
+                'urlaub_aktiv': False,
+                'urlaubstage': 0,
+                'urlaubsentgelt_berechnet': 0.0
+            } for month in MONATE
+        }
+
     # Monat auswählen
     selected_month = st.selectbox("Wähle einen Monat aus:", MONATE)
     month_data = st.session_state.monthly_data[selected_month]
@@ -203,7 +220,7 @@ def main():
     st.divider() # Visuelle Trennung
     
     # Kalender mit Feiertagen anzeigen
-    current_year = datetime.now().year # Dynamisches Jahr für den Kalender
+    current_year = datetime.now().year
     month_index = MONATE.index(selected_month) + 1
     calendar_html = get_month_calendar_html(current_year, month_index, FEIERTAGE_NRW_2025)
     st.markdown(calendar_html, unsafe_allow_html=True)
@@ -221,6 +238,76 @@ def main():
     
     st.divider() # Visuelle Trennung
 
+    # Urlaubsplanung
+    st.subheader("🏖️ Urlaubsplanung")
+    current_vacation_data = st.session_state.monthly_vacation[selected_month]
+
+    col_vac_1, col_vac_2 = st.columns([1, 2])
+    with col_vac_1:
+        urlaub_aktiv = st.checkbox("Urlaub im ausgewählten Monat nehmen?", 
+                                   value=current_vacation_data['urlaub_aktiv'],
+                                   key=f"urlaub_aktiv_{selected_month}")
+    with col_vac_2:
+        urlaubstage = st.number_input(
+            "Anzahl der Urlaubstage:",
+            min_value=0,
+            max_value=31, # Maximal mögliche Tage im Monat
+            value=current_vacation_data['urlaubstage'] if urlaub_aktiv else 0,
+            step=1,
+            format="%d",
+            disabled=not urlaub_aktiv,
+            key=f"urlaubstage_{selected_month}"
+        )
+
+    # Berechne durchschnittlichen Stundenlohn der letzten 3 Monate für Urlaubsentgelt
+    urlaubsentgelt = 0.0
+    if urlaub_aktiv and urlaubstage > 0:
+        berechnungsmonate_fuer_urlaub_basis_lohn = []
+
+        # Ermittle die letzten 3 vollen Monate VOR dem aktuell ausgewählten Monat
+        current_month_index = MONATE.index(selected_month)
+        
+        # Gehe 3 Monate zurück (von Vormonat bis vor 3 Monate)
+        # Wenn der aktuelle Monat z.B. März (Index 2) ist, brauchen wir Dez, Jan, Feb
+        # Startindex: max(0, 2 - 1 - 2) = max(0, -1) = 0 (für Januar)
+        # Endindex: 2 (für März, exklusiv)
+        for i in range(max(0, current_month_index - 3), current_month_index):
+            prev_month = MONATE[i]
+            prev_month_data = st.session_state.monthly_data.get(prev_month)
+            if prev_month_data and prev_month_data['stunden'] > 0: # Nur Monate mit Arbeitsstunden berücksichtigen
+                # Für die Basis des Urlaubsentgelts zählen nur der Grundlohn der Stunden, keine Zuschläge
+                brutto_grundlohn_month_value = prev_month_data['grundlohn'] * prev_month_data['stunden']
+                berechnungsmonate_fuer_urlaub_basis_lohn.append(brutto_grundlohn_month_value)
+        
+        if berechnungsmonate_fuer_urlaub_basis_lohn:
+            durchschnitt_monatslohn = sum(berechnungsmonate_fuer_urlaub_basis_lohn) / len(berechnungsmonate_fuer_urlaub_basis_lohn)
+            
+            # Annahme: Monat hat durchschnittlich 20 Arbeitstage für die Umrechnung des Tageslohns
+            # Dies ist eine Vereinfachung. Eine genauere Methode wäre die Summe der Stunden
+            # der letzten 13 Wochen / tatsächliche Arbeitstage in diesen 13 Wochen.
+            durchschnitt_tageslohn = durchschnitt_monatslohn / 20.0
+            urlaubsentgelt = durchschnitt_tageslohn * urlaubtage
+            
+            st.info(f"""
+            **Berechnung des Urlaubsentgelts:**
+            - Durchschnittlicher Brutto-Grundlohn der letzten {len(berechnungsmonate_fuer_urlaub_basis_lohn)} berücksichtigten Monate (ohne Zuschläge): **{durchschnitt_monatslohn:.2f} €**
+            - Daraus errechneter Tageslohn (Basis für Urlaubsentgelt, bei 20 Arbeitstagen/Monat): **{durchschnitt_tageslohn:.2f} €**
+            - Ihr Urlaubsentgelt für **{urlaubtage} Tage** beträgt: **{urlaubsentgelt:.2f} €**
+            
+            *Dieses Entgelt wird zu Ihrem Brutto-Grundlohn addiert und zählt zur Minijob-Grenze.*
+            """)
+        else:
+            st.warning("Keine ausreichenden Arbeitsdaten aus den Vormonaten vorhanden, um das Urlaubsentgelt zu berechnen. Bitte geben Sie Arbeitsstunden in mindestens drei vorherigen Monaten ein.")
+    
+    # Speichere die aktualisierten Urlaubsinformationen im Session State
+    st.session_state.monthly_vacation[selected_month] = {
+        'urlaub_aktiv': urlaub_aktiv,
+        'urlaubstage': urlaubstage,
+        'urlaubsentgelt_berechnet': urlaubentgelt
+    }
+
+    st.divider() # Visuelle Trennung
+    
     # Vorlagen für typische Szenarien
     template = st.selectbox(
         "Lade eine Vorlage für die Stundenanzahl:",
@@ -228,16 +315,17 @@ def main():
     )
     
     if template != "Individuell":
-        # Wenn eine Vorlage gewählt wird, werden die Stunden aktualisiert
         if template == "6h/Woche (24h/Monat)":
             month_data['stunden'] = 24.0
         elif template == "8h/Woche (32h/Monat)":
             month_data['stunden'] = 32.0
         elif template == "10h/Woche (40h/Monat)":
             month_data['stunden'] = 40.0
-        # Optional: Setze Zuschlagsstunden auch zurück oder auf sinnvolle Werte
+        # Setze Zuschlagsstunden auf 0, wenn Vorlage gewählt wird
         month_data['sf_zuschlag_stunden'] = 0.0
         month_data['nacht_zuschlag_stunden'] = 0.0
+        month_data['sf_zuschlag'] = False
+        month_data['nacht_zuschlag'] = False
         
     col1, col2 = st.columns(2)
     with col1:
@@ -247,11 +335,11 @@ def main():
             value=month_data['grundlohn'],
             step=0.5,
             format="%.2f",
-            key=f"grundlohn_{selected_month}" # Eindeutiger Key für jeden Monat
+            key=f"grundlohn_{selected_month}"
         )
     with col2:
         stunden = st.number_input(
-            "Arbeitsstunden pro Monat:",
+            "Arbeitsstunden pro Monat (ohne Urlaub):", # Klarstellung
             min_value=0.0,
             value=month_data['stunden'],
             step=1.0,
@@ -266,13 +354,12 @@ def main():
     with col1:
         sf_zuschlag = st.checkbox("Sonntag-/Feiertagszuschlag (30%)", value=month_data['sf_zuschlag'], key=f"sf_check_{selected_month}")
     with col2:
-        # Standardwert für sf_zuschlag_stunden sollte 0 sein, wenn nicht aktiv
         sf_zuschlag_stunden_val = month_data['sf_zuschlag_stunden'] if sf_zuschlag else 0.0
         sf_zuschlag_stunden = st.number_input(
             "Stunden mit SF-Zuschlag:",
             min_value=0.0,
             max_value=stunden,
-            value=min(sf_zuschlag_stunden_val, stunden), # Sicherstellen, dass der Wert nicht über Stunden liegt
+            value=min(sf_zuschlag_stunden_val, stunden),
             step=1.0,
             format="%.1f",
             disabled=not sf_zuschlag,
@@ -283,13 +370,12 @@ def main():
     with col1:
         nacht_zuschlag = st.checkbox("Nacht-Zuschlag (25%)", value=month_data['nacht_zuschlag'], key=f"nacht_check_{selected_month}")
     with col2:
-        # Standardwert für nacht_zuschlag_stunden sollte 0 sein, wenn nicht aktiv
         nacht_zuschlag_stunden_val = month_data['nacht_zuschlag_stunden'] if nacht_zuschlag else 0.0
         nacht_zuschlag_stunden = st.number_input(
             "Stunden mit Nacht-Zuschlag:",
             min_value=0.0,
             max_value=stunden,
-            value=min(nacht_zuschlag_stunden_val, stunden), # Sicherstellen, dass der Wert nicht über Stunden liegt
+            value=min(nacht_zuschlag_stunden_val, stunden),
             step=1.0,
             format="%.1f",
             disabled=not nacht_zuschlag,
@@ -306,16 +392,20 @@ def main():
         'nacht_zuschlag_stunden': nacht_zuschlag_stunden
     }
     
+    # Hole das berechnete Urlaubsentgelt für den aktuellen Monat
+    current_urlaubsentgelt = st.session_state.monthly_vacation[selected_month]['urlaubsentgelt_berechnet']
+
     results = calculate_salary(
         grundlohn, stunden, 
         sf_zuschlag, sf_zuschlag_stunden,
-        nacht_zuschlag, nacht_zuschlag_stunden
+        nacht_zuschlag, nacht_zuschlag_stunden,
+        urlaubsentgelt=current_urlaubsentgelt # Hier wird der neue Parameter übergeben
     )
     
     st.divider() # Visuelle Trennung
 
     # Berechnung des Prozentsatzes und Status
-    prozent_ausgeschoepft = (results['brutto_grundlohn'] / MINIJOB_GRENZE) * 100
+    prozent_ausgeschoepft = (results['brutto_grundlohn_fuer_grenze'] / MINIJOB_GRENZE) * 100
     status_emoji = get_status_color(prozent_ausgeschoepft)
     
     # Thermometer-Anzeige
@@ -327,37 +417,36 @@ def main():
     st.subheader("💰 Monatsbeträge im Überblick")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Brutto Grundlohn", f"{results['brutto_grundlohn']:.2f} €")
+        st.metric("Brutto Grundlohn (Stunden)", f"{results['brutto_grundlohn_stunden']:.2f} €")
     with col2:
-        st.metric("Steuerfreie Zuschläge", f"{results['zuschlage']:.2f} €")
+        st.metric("Urlaubsentgelt", f"{results['urlaubsentgelt']:.2f} €")
     with col3:
-        st.metric("Brutto Gesamt", f"{results['brutto_gesamt']:.2f} €")
+        st.metric("Steuerfreie Zuschläge", f"{results['zuschlage']:.2f} €")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Netto Auszahlung", f"{results['netto']:.2f} €")
+        st.metric("Brutto Gesamt (für Grenze)", f"{results['brutto_grundlohn_fuer_grenze']:.2f} €")
     with col2:
-        if results['brutto_grundlohn'] <= MINIJOB_GRENZE:
-             st.metric("Noch bis Minijob-Grenze", f"{results['freibetrag_rest']:.2f} € ({results['rest_stunden']} Stunden bei {grundlohn:.2f} €/h)")
-        else:
-             st.metric("Minijob-Grenze überschritten", f"{(results['brutto_grundlohn'] - MINIJOB_GRENZE):.2f} €")
-
+        st.metric("Gesamt Brutto Auszahlung", f"{results['brutto_gesamt']:.2f} €")
+    with col3:
+        st.metric("Netto Auszahlung", f"{results['netto']:.2f} €")
+    
     st.divider() # Visuelle Trennung
     
-    if results['brutto_grundlohn'] > MINIJOB_GRENZE:
+    if results['brutto_grundlohn_fuer_grenze'] > MINIJOB_GRENZE:
         st.error(f"""
         **🚨 Achtung: Minijob-Grenze von {MINIJOB_GRENZE:.2f} € überschritten!**
-        - Ihr Grundlohn für diesen Monat beträgt: **{results['brutto_grundlohn']:.2f} €**
-        - Die Überschreitung beträgt: **{(results['brutto_grundlohn'] - MINIJOB_GRENZE):.2f} €**
+        - Ihr Brutto-Grundlohn (inkl. Urlaubsentgelt) für diesen Monat beträgt: **{results['brutto_grundlohn_fuer_grenze']:.2f} €**
+        - Die Überschreitung beträgt: **{(results['brutto_grundlohn_fuer_grenze'] - MINIJOB_GRENZE):.2f} €**
         
         *Hinweis: Die hier berechneten Abzüge (pauschal 30%) sind eine Vereinfachung. In der Realität würden bei Überschreitung der Minijob-Grenze volle Sozialversicherungsbeiträge anfallen (Renten-, Kranken-, Pflege- und Arbeitslosenversicherung), was zu deutlich höheren Abzügen führen würde. Die steuerfreien Zuschläge ({results['zuschlage']:.2f} €) zählen nicht zur Minijob-Grenze.*
         """)
     else:
         st.success(f"""
         **🎉 Sie liegen innerhalb der Minijob-Grenze von {MINIJOB_GRENZE:.2f} €!**
-        - Brutto Grundlohn: **{results['brutto_grundlohn']:.2f} €**
+        - Brutto Grundlohn (Stunden + Urlaub): **{results['brutto_grundlohn_fuer_grenze']:.2f} €**
         - Abzug Rentenversicherung (3,6%): **-{results['rentenversicherung_abzug']:.2f} €**
-        - Netto Grundlohn (nach RV-Abzug): **{(results['brutto_grundlohn'] - results['rentenversicherung_abzug']):.2f} €**
+        - Netto Grundlohn (nach RV-Abzug): **{(results['brutto_grundlohn_fuer_grenze'] - results['rentenversicherung_abzug']):.2f} €**
         - Steuerfreie Zuschläge: **+{results['zuschlage']:.2f} €**
         - **Netto Auszahlung Gesamt: {results['netto']:.2f} €**
         - Verbleibender Betrag bis zur Grenze: **{results['freibetrag_rest']:.2f} €** (entspricht ca. {results['rest_stunden']} Stunden bei Ihrem Stundenlohn)
@@ -374,16 +463,18 @@ def main():
     monthly_comparison = []
     for monat in MONATE:
         data = st.session_state.monthly_data[monat]
-        # Füge nur Monate hinzu, die tatsächlich Stunden oder Zuschläge haben
-        if data['stunden'] > 0 or data['sf_zuschlag_stunden'] > 0 or data['nacht_zuschlag_stunden'] > 0:
+        vac_data = st.session_state.monthly_vacation[monat]
+
+        if data['stunden'] > 0 or data['sf_zuschlag_stunden'] > 0 or data['nacht_zuschlag_stunden'] > 0 or vac_data['urlaubsentgelt_berechnet'] > 0:
             result = calculate_salary(
                 data['grundlohn'], data['stunden'],
                 data['sf_zuschlag'], data['sf_zuschlag_stunden'],
-                data['nacht_zuschlag'], data['nacht_zuschlag_stunden']
+                data['nacht_zuschlag'], data['nacht_zuschlag_stunden'],
+                urlaubsentgelt=vac_data['urlaubsentgelt_berechnet']
             )
             monthly_comparison.append({
                 'Monat': monat,
-                'Brutto Grundlohn': result['brutto_grundlohn'],
+                'Brutto Grundlohn (inkl. Urlaub)': result['brutto_grundlohn_fuer_grenze'],
                 'Zuschläge': result['zuschlage'],
                 'Netto': result['netto']
             })
@@ -397,9 +488,10 @@ def main():
         
         st.write("Detailansicht für den aktuellen Monat:")
         current_data_df = pd.DataFrame({
-            'Kategorie': ['Brutto Grundlohn', 'Zuschläge', 'Netto'],
+            'Kategorie': ['Brutto Grundlohn (Stunden)', 'Urlaubsentgelt', 'Zuschläge', 'Netto'],
             'Betrag': [
-                results['brutto_grundlohn'],
+                results['brutto_grundlohn_stunden'],
+                results['urlaubsentgelt'],
                 results['zuschlage'],
                 results['netto']
             ]
@@ -415,7 +507,10 @@ def main():
 
     if st.sidebar.button("Daten als CSV exportieren"):
         data_for_export = []
-        for month, data in st.session_state.monthly_data.items():
+        for month in MONATE:
+            data = st.session_state.monthly_data[month]
+            vac_data = st.session_state.monthly_vacation[month]
+
             row = {
                 'Monat': month,
                 'Grundlohn': data['grundlohn'],
@@ -423,16 +518,19 @@ def main():
                 'SF_Zuschlag': data['sf_zuschlag'],
                 'SF_Zuschlag_Stunden': data['sf_zuschlag_stunden'],
                 'Nacht_Zuschlag': data['nacht_zuschlag'],
-                'Nacht_Zuschlag_Stunden': data['nacht_zuschlag_stunden']
+                'Nacht_Zuschlag_Stunden': data['nacht_zuschlag_stunden'],
+                'Urlaub_Aktiv': vac_data['urlaub_aktiv'],
+                'Urlaubstage': vac_data['urlaubstage'],
+                'Urlaubsentgelt_Berechnet': vac_data['urlaubsentgelt_berechnet']
             }
             data_for_export.append(row)
         
         df = pd.DataFrame(data_for_export)
-        csv = df.to_csv(index=False).encode('utf-8') # UTF-8 Kodierung für Sonderzeichen
+        csv = df.to_csv(index=False).encode('utf-8')
         st.sidebar.download_button(
             "CSV herunterladen",
             csv,
-            "gehaltsberechnung.csv", # Dateiname angepasst
+            "gehaltsberechnung_mit_urlaub.csv",
             "text/csv",
             key='download-csv'
         )
@@ -441,15 +539,18 @@ def main():
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
-            # Überprüfen, ob alle notwendigen Spalten vorhanden sind
-            required_columns = ['Monat', 'Grundlohn', 'Stunden', 'SF_Zuschlag', 'SF_Zuschlag_Stunden', 'Nacht_Zuschlag', 'Nacht_Zuschlag_Stunden']
+            required_columns = [
+                'Monat', 'Grundlohn', 'Stunden', 'SF_Zuschlag', 'SF_Zuschlag_Stunden',
+                'Nacht_Zuschlag', 'Nacht_Zuschlag_Stunden',
+                'Urlaub_Aktiv', 'Urlaubstage', 'Urlaubsentgelt_Berechnet'
+            ]
             if not all(col in df.columns for col in required_columns):
-                st.sidebar.error("Fehler: Die geladene CSV-Datei hat nicht die erwarteten Spalten.")
+                st.sidebar.error("Fehler: Die geladene CSV-Datei hat nicht die erwarteten Spalten für die Gehalts- und Urlaubsdaten.")
                 return
             
             for _, row in df.iterrows():
                 month = row['Monat']
-                if month in MONATE: # Sicherstellen, dass der Monat gültig ist
+                if month in MONATE:
                     st.session_state.monthly_data[month] = {
                         'grundlohn': float(row['Grundlohn']),
                         'stunden': float(row['Stunden']),
@@ -458,11 +559,15 @@ def main():
                         'nacht_zuschlag': str(row['Nacht_Zuschlag']).lower() == 'true',
                         'nacht_zuschlag_stunden': float(row['Nacht_Zuschlag_Stunden'])
                     }
+                    st.session_state.monthly_vacation[month] = {
+                        'urlaub_aktiv': str(row['Urlaub_Aktiv']).lower() == 'true',
+                        'urlaubstage': int(row['Urlaubtage']),
+                        'urlaubsentgelt_berechnet': float(row['Urlaubsentgelt_Berechnet'])
+                    }
                 else:
                     st.sidebar.warning(f"Überspringe unbekannten Monat in CSV: {month}")
             st.sidebar.success("Daten erfolgreich geladen!")
-            # Workaround, um die Anzeige nach dem Laden zu aktualisieren
-            st.experimental_rerun() 
+            st.experimental_rerun()
         except Exception as e:
             st.sidebar.error(f"Fehler beim Laden der CSV-Datei: {e}")
             st.sidebar.info("Bitte stellen Sie sicher, dass die CSV-Datei das korrekte Format hat.")
@@ -471,11 +576,12 @@ def main():
     st.info(f"""
     **Wichtige Hinweise zur Berechnung:**
     - **Mindestlohn 2025:** Aktuell {MINDESTLOHN:.2f} € pro Stunde.
-    - **Minijob-Grenze:** Der Brutto-Grundlohn darf {MINIJOB_GRENZE:.2f} € pro Monat nicht überschreiten.
-    - **Rentenversicherungspflicht (Minijob):** 3,6% des Bruttolohns (ohne Zuschläge).
+    - **Minijob-Grenze:** Der Brutto-Grundlohn (inkl. Urlaubsentgelt) darf {MINIJOB_GRENZE:.2f} € pro Monat nicht überschreiten.
+    - **Rentenversicherungspflicht (Minijob):** 3,6% des Bruttolohns (ohne Zuschläge, inkl. Urlaubsentgelt).
     - **SF-Zuschlag (Sonntag-/Feiertagszuschlag):** 30% Aufschlag auf den Stundenlohn (steuerfrei).
     - **Nacht-Zuschlag:** 25% Aufschlag auf den Stundenlohn (steuerfrei).
     - **Steuerfreie Zuschläge:** Diese zählen *nicht* zur Minijob-Grenze.
+    - **Urlaubsentgelt:** Berechnet sich auf Basis des durchschnittlichen Brutto-Grundlohns der **letzten drei Monate** vor dem Urlaubsmonat und zählt zur Minijob-Grenze.
     - **Vereinfachte Abzüge:** Bei Überschreitung der Minijob-Grenze wird hier eine **pauschale Abzug von 30%** des Grundlohns angenommen. Dies ist eine Vereinfachung! In der Realität können die Abzüge für Sozialversicherungen (Kranken-, Pflege-, Renten- und Arbeitslosenversicherung) deutlich höher sein.
     - **Maximale Arbeitszeit (orientierend):** ca. 42 Stunden pro Monat (entspricht ca. 10,5 Stunden pro Woche bei einem Monatsdurchschnitt von 4 Wochen).
     """)
