@@ -166,3 +166,4 @@ def main():
     if "monthly_data" not in st.session_state:
         st.session_state.monthly_data = {
             m: {"grundlohn": MIN}
+        }
